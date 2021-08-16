@@ -44,6 +44,16 @@
 #include "itkTestingHashImageFilter.h"
 #endif // USE_MD5
 
+#if ITK_VERSION_MAJOR > 4
+using IOFileModeEnum = itk::IOFileModeEnum;
+using IOComponentEnum = itk::IOComponentEnum;
+using IOPixelEnum = itk::IOPixelEnum;
+#else // ITK_VERSION_MAJOR <= 4
+using IOFileModeEnum = itk::ImageIOFactory;
+using IOComponentEnum = itk::ImageIOBase;
+using IOPixelEnum = itk::ImageIOBase;
+#endif // ITK_VERSION_MAJOR > 4
+
 #include "gdcmBase64.h"
 #include "gdcmCSAHeader.h"
 #include "gdcmCSAElement.h"
@@ -924,54 +934,54 @@ std::string ComputeMD5Hash(const itk::MetaDataDictionary &clDicomTags, const std
   std::string strHash;
 
   switch (p_clImageIO->GetPixelType()) {
-  case ImageIOType::SCALAR:
+  case IOPixelEnum::SCALAR:
     switch (p_clImageIO->GetInternalComponentType()) {
-    case ImageIOType::UCHAR:
+    case IOComponentEnum::UCHAR:
       strHash = ComputeMD5HashHelper<unsigned char, Dimension>(strFilePath);
       break;
-    case ImageIOType::CHAR:
+    case IOComponentEnum::CHAR:
       strHash = ComputeMD5HashHelper<char, Dimension>(strFilePath);
       break;
-    case ImageIOType::USHORT:
+    case IOComponentEnum::USHORT:
       strHash = ComputeMD5HashHelper<unsigned short, Dimension>(strFilePath);
       break;
-    case ImageIOType::SHORT:
+    case IOComponentEnum::SHORT:
       strHash = ComputeMD5HashHelper<short, Dimension>(strFilePath);
       break;
-    case ImageIOType::UINT:
+    case IOComponentEnum::UINT:
       strHash = ComputeMD5HashHelper<unsigned int, Dimension>(strFilePath);
       break;
-    case ImageIOType::INT:
+    case IOComponentEnum::INT:
       strHash = ComputeMD5HashHelper<int, Dimension>(strFilePath);
       break;
-    case ImageIOType::ULONG:
+    case IOComponentEnum::ULONG:
       strHash = ComputeMD5HashHelper<unsigned long, Dimension>(strFilePath);
       break;
-    case ImageIOType::LONG:
+    case IOComponentEnum::LONG:
       strHash = ComputeMD5HashHelper<long, Dimension>(strFilePath);
       break;
-    case ImageIOType::FLOAT:
+    case IOComponentEnum::FLOAT:
       strHash = ComputeMD5HashHelper<float, Dimension>(strFilePath);
       break;
-    case ImageIOType::DOUBLE:
+    case IOComponentEnum::DOUBLE:
       strHash = ComputeMD5HashHelper<double, Dimension>(strFilePath);
       break;
     default:
       break; // Not supported component type?
     }
     break;
-  case ImageIOType::RGB:
+  case IOPixelEnum::RGB:
     switch (p_clImageIO->GetInternalComponentType()) {
-    case ImageIOType::UCHAR:
+    case IOComponentEnum::UCHAR:
       strHash = ComputeMD5HashHelper<itk::RGBPixel<unsigned char>, Dimension>(strFilePath);
       break;
     default:
       break; // Not supported component type?
     }
     break;
-  case ImageIOType::RGBA:
+  case IOPixelEnum::RGBA:
     switch (p_clImageIO->GetInternalComponentType()) {
-    case ImageIOType::UCHAR:
+    case IOComponentEnum::UCHAR:
       strHash = ComputeMD5HashHelper<itk::RGBAPixel<unsigned char>, Dimension>(strFilePath);
       break;
     default:
