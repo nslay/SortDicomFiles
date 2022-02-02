@@ -125,7 +125,7 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
   std::strncpy(a_cTmp, strAcquisitionTime.data() + 4, 9);
   a_cTmp[9] = '\0'; // XXX: Not guaranteed with strncpy
 
-  const double dSeconds = std::min(std::strtod(a_cTmp, &p), 59.0);
+  const double dSeconds = std::strtod(a_cTmp, &p);
 
   if (*p != '\0')
     return -1;
@@ -137,7 +137,7 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
   stTime.tm_mday = ulDay;
   stTime.tm_hour = ulHour;
   stTime.tm_min = ulMinute;
-  stTime.tm_sec = (unsigned long)std::round(dSeconds);
+  stTime.tm_sec = (unsigned long)std::min(std::round(dSeconds), 59.0);
 
   return std::mktime(&stTime);
 }
