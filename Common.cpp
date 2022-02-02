@@ -125,7 +125,7 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
   std::strncpy(a_cTmp, strAcquisitionTime.data() + 4, 9);
   a_cTmp[9] = '\0'; // XXX: Not guaranteed with strncpy
 
-  const double dSeconds = std::strtod(a_cTmp, &p);
+  const double dSeconds = std::min(std::strtod(a_cTmp, &p), 59.0);
 
   if (*p != '\0')
     return -1;
