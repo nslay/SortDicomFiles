@@ -16,6 +16,24 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+# 
+# Nathan Lay
+# AI Resource at National Cancer Institute
+# National Institutes of Health
+# February 2022
+# 
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+# OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+# IN NO EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# 
+
 #######################################################################
 # Introduction                                                        #
 #######################################################################
@@ -135,7 +153,7 @@ Lastly, SortDicomFiles provides the below usage message when
 provided with the -h flag or no arguments. It's useful if you
 forget.
 
-Usage: ./SortDicomFiles [-cehlr] folder|filePattern [folder2|filePattern2 ...] destinationPattern
+Usage: SortDicomFiles [-cehlr] folder|filePattern [folder2|filePattern2 ...] destinationPattern
 
 Options:
 -c -- Copy instead of move.
@@ -148,6 +166,8 @@ This version supports the following destination patterns:
 
 Supported patterns:
 <accession number> (0008|0050)
+<acquisition date> (0008|0022)
+<acquisition time> (0008|0032)
 <body part examined> (0018|0015)
 <instance number> (0020|0013)
 <instance uid> (0008|0018)
@@ -158,7 +178,9 @@ Supported patterns:
 <series number> (0020|0011)
 <series uid> (0020|000e)
 <study date> (0008|0020)
+<temporal position> (0020|0100)
 <diffusion b-value> (0018|9087 or vendor-specific)
+<volume number> (volume acquisition ordinal in time series scans)
 <z spacing> (z voxel spacing)
 <z coordinate> (z voxel coordinate)
 <z origin> (z patient origin)
@@ -210,13 +232,12 @@ Unix-like systems:
 - Run the "make" command.
 
 SortDicomFiles has been successfully built and tested with:
-GCC 4.8.5 on Ubuntu 14.04
-Microsoft Visual Studio 2010 on Windows 7 and Windows Server 2012
-Microsoft Visual Studio 2013 on Windows 7
+GCC 7.5.0 on Ubuntu 18.04
+Microsoft Visual Studio 2019 on Windows 10
 
 using ITK versions:
-ITK 4.11
-ITK 4.7
+ITK 5.1
+ITK 4.13
 
 #######################################################################
 # Modifying                                                           #

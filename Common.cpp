@@ -71,6 +71,77 @@ std::vector<std::string> SplitString(const std::string &strValue, const std::str
   return vTokens;
 }
 
+std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std::string &strAcquisitionTime) {
+  // Sanity check
+  if (strAcquisitionDate.size() != 8 || strAcquisitionTime.size() < 6)
+    return -1;
+
+  char *p = nullptr;
+  char a_cTmp[10] = ""; // Keep p valid for checking (substr().c_str() would cause p to be invalid)
+
+  std::strncpy(a_cTmp, strAcquisitionDate.data(), 4);
+  a_cTmp[4] = '\0'; // XXX: Not guaranteed with strncpy
+
+  const unsigned long ulYear = std::strtoul(a_cTmp, &p, 10); // Avoid std::stoul owing to lame exceptions
+
+  if (*p != '\0')
+    return -1;
+
+  std::strncpy(a_cTmp, strAcquisitionDate.data() + 4, 2);
+  a_cTmp[2] = '\0'; // XXX: Not guaranteed with strncpy
+
+  const unsigned long ulMonth = std::strtoul(a_cTmp, &p, 10);
+
+  if (*p != '\0')
+    return -1;
+
+  std::strncpy(a_cTmp, strAcquisitionDate.data() + 6, 2);
+  a_cTmp[2] = '\0'; // XXX: Not guaranteed with strncpy
+
+  const unsigned long ulDay = std::strtoul(a_cTmp, &p, 10);
+
+  if (*p != '\0')
+    return -1;
+
+  std::strncpy(a_cTmp, strAcquisitionTime.data(), 2);
+  a_cTmp[2] = '\0'; // XXX: Not guaranteed with strncpy
+
+  const unsigned long ulHour = std::strtoul(a_cTmp, &p, 10);
+
+  if (*p != '\0')
+    return -1;
+
+  std::strncpy(a_cTmp, strAcquisitionTime.data() + 2, 2);
+  a_cTmp[2] = '\0'; // XXX: Not guaranteed with strncpy
+
+  const unsigned long ulMinute = std::strtoul(a_cTmp, &p, 10);
+
+  if (*p != '\0')
+    return -1;
+
+  if (strAcquisitionTime.size() > 6 && strAcquisitionTime[6] != '.')
+    return -1;
+
+  std::strncpy(a_cTmp, strAcquisitionTime.data() + 4, 9);
+  a_cTmp[9] = '\0'; // XXX: Not guaranteed with strncpy
+
+  const double dSeconds = std::strtod(a_cTmp, &p);
+
+  if (*p != '\0')
+    return -1;
+
+  std::tm stTime = {};
+
+  stTime.tm_year = ulYear - 1900;
+  stTime.tm_mon = ulMonth - 1;
+  stTime.tm_mday = ulDay;
+  stTime.tm_hour = ulHour;
+  stTime.tm_min = ulMinute;
+  stTime.tm_sec = (unsigned long)std::round(dSeconds);
+
+  return std::mktime(&stTime);
+}
+
 #ifdef _WIN32
 bool FileExists(const std::string &strPath) {
   return GetFileAttributes(strPath.c_str()) != INVALID_FILE_ATTRIBUTES;

@@ -16,6 +16,24 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*-
+ * Nathan Lay
+ * AI Resource at National Cancer Institute
+ * National Institutes of Health
+ * February 2022
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */ 
+
 #include <cstdlib>
 #include <cstdint>
 #include <cctype>
@@ -24,6 +42,7 @@
 #include <iomanip>
 #include <vector>
 #include <map>
+#include <set>
 #include <limits>
 #include <string>
 #include <algorithm>
@@ -60,6 +79,7 @@ using IOPixelEnum = itk::ImageIOBase;
 
 std::map<std::string, std::string> g_mNameToTagMap;
 std::unordered_map<std::string, itk::ImageBase<3>::Pointer> g_mSeriesUIDToImageBase;
+std::unordered_map<std::string, std::unordered_map<std::string, unsigned int>> g_mSeriesUIDToInstanceUIDVolumeNumberMap;
 
 #ifdef USE_MD5
 std::unordered_map<std::string, std::string> g_mSeriesUIDToMD5;
@@ -83,6 +103,7 @@ void PrintSupportedPatterns() {
     std::cout << '<' << itr->first << "> (" << itr->second << ')' << std::endl;
 
   std::cout << "<diffusion b-value> (0018|9087 or vendor-specific)" << std::endl;
+  std::cout << "<volume number> (volume acquisition ordinal in time series scans)" << std::endl;
   std::cout << "<z spacing> (z voxel spacing)" << std::endl;
   std::cout << "<z coordinate> (z voxel coordinate)" << std::endl;
   std::cout << "<z origin> (z patient origin)" << std::endl;
@@ -129,6 +150,10 @@ std::string ComputeDiffusionBValueGE(const itk::MetaDataDictionary &clDicomTags)
 std::string ComputeDiffusionBValueProstateX(const itk::MetaDataDictionary &clDicomTags); // Same as Skyra and Verio
 std::string ComputeDiffusionBValuePhilips(const itk::MetaDataDictionary &clDicomTags);
 
+void ComputeVolumeNumberByTemporalPosition(const itk::MetaDataDictionary &clDicomTags, const std::string &strPath);
+void ComputeVolumeNumberByAcquisitionTime(const itk::MetaDataDictionary &clDicomTags, const std::string &strPath);
+std::string ComputeVolumeNumber(const itk::MetaDataDictionary &clDicomTags, const std::string &strPath);
+
 #ifdef USE_MD5
 template<typename PixelType, unsigned int Dimension>
 std::string ComputeMD5HashHelper(const std::string &strFilePath);
@@ -155,6 +180,9 @@ int main(int argc, char **argv) {
   g_mNameToTagMap["accession number"] = "0008|0050";
   g_mNameToTagMap["series uid"] = "0020|000e";
   g_mNameToTagMap["body part examined"] = "0018|0015";
+  g_mNameToTagMap["acquisition date"] = "0008|0022";
+  g_mNameToTagMap["acquisition time"] = "0008|0032";
+  g_mNameToTagMap["temporal position"] = "0020|0100";
 
   bool bEraseFolders = false;
   bool bRecursive = false;
@@ -318,6 +346,10 @@ std::string MakeValue(const std::string &strTag, const itk::MetaDataDictionary &
   }
   else if (strTag == "diffusion b-value") {
     const std::string strValue = ComputeDiffusionBValue(clDicomTags);
+    return strValue.size() > 0 ? strValue : MakeFailedValue(strTag); 
+  }
+  else if (strTag == "volume number") {
+    const std::string strValue = ComputeVolumeNumber(clDicomTags, DirName(strPath));
     return strValue.size() > 0 ? strValue : MakeFailedValue(strTag); 
   }
   else if (strTag == "z spacing") {
@@ -789,6 +821,250 @@ bool IsHexDigit(char c) {
   return false;
 }
 
+void ComputeVolumeNumberByTemporalPosition(const itk::MetaDataDictionary &clDicomTags, const std::string &strPath) {
+  typedef itk::GDCMImageIO ImageIOType;
+  typedef itk::GDCMSeriesFileNames NamesGeneratorType;
+
+  std::string strSeriesUID;
+
+  if (!itk::ExposeMetaData(clDicomTags, "0020|000e", strSeriesUID))
+    return; // Uhh?
+
+  if (g_mSeriesUIDToInstanceUIDVolumeNumberMap.find(strSeriesUID) != g_mSeriesUIDToInstanceUIDVolumeNumberMap.end())
+    return; // Already computed
+
+  auto &mSOPToVolumeNumber = g_mSeriesUIDToInstanceUIDVolumeNumberMap[strSeriesUID]; // Insert
+
+  ImageIOType::Pointer p_clImageIO = ImageIOType::New();  
+
+  if (!p_clImageIO)
+    return;
+
+  NamesGeneratorType::Pointer p_clNamesGenerator = NamesGeneratorType::New();
+
+  if (!p_clNamesGenerator)
+    return;
+
+  // Collect all files in this series so we can verify their membership in the more specialized series
+  p_clNamesGenerator->SetUseSeriesDetails(false);
+  p_clNamesGenerator->SetDirectory(strPath);
+
+  std::unordered_set<std::string> sAllFiles;
+  std::vector<std::string> vAllFiles = p_clNamesGenerator->GetFileNames(strSeriesUID);
+  sAllFiles.insert(vAllFiles.begin(), vAllFiles.end());
+
+  if (sAllFiles.empty())
+    return; // What?
+
+  // Old data gets re-used... make a new one
+  p_clNamesGenerator = NamesGeneratorType::New();
+
+  if (!p_clNamesGenerator)
+    return;
+
+  p_clNamesGenerator->SetUseSeriesDetails(true);
+  p_clNamesGenerator->AddSeriesRestriction("0020|0100"); // Temporal position
+  p_clNamesGenerator->SetDirectory(strPath);
+
+  // These are fake versions of the series UID!
+  std::vector<std::string> vAllSeriesUIDs = p_clNamesGenerator->GetSeriesUIDs();
+
+  typedef std::map<int, std::vector<std::string>> MapType; // temporal position --> SOP instance UID
+
+  MapType mVolumeMap;
+  std::string strTemporalPosition;
+  std::string strSOPInstanceUID;
+
+  try {
+    for (const std::string &strFakeSeriesUID : vAllSeriesUIDs) {
+      vAllFiles = p_clNamesGenerator->GetFileNames(strFakeSeriesUID);
+     
+      if (vAllFiles.empty() || sAllFiles.find(vAllFiles[0]) == sAllFiles.end())
+        continue;
+
+      p_clImageIO->SetFileName(vAllFiles[0]);
+      p_clImageIO->ReadImageInformation();
+
+      if (!itk::ExposeMetaData(p_clImageIO->GetMetaDataDictionary(), "0020|0100", strTemporalPosition))
+        return; // Should not happen!
+
+      Trim(strTemporalPosition);
+
+      char *p = nullptr;
+      const int iTemporalPosition = std::strtol(strTemporalPosition.c_str(), &p, 10);
+
+      if (*p != '\0')
+        return; // What?
+
+      auto &vSOPs = mVolumeMap[iTemporalPosition];
+      vSOPs.reserve(vAllFiles.size());
+
+      for (const std::string &strFileName : vAllFiles) {
+        p_clImageIO->SetFileName(strFileName);
+        p_clImageIO->ReadImageInformation();
+
+        if (!itk::ExposeMetaData(p_clImageIO->GetMetaDataDictionary(), "0008|0018", strSOPInstanceUID))
+          return;
+
+        Trim(strSOPInstanceUID);
+
+        vSOPs.emplace_back(strSOPInstanceUID);
+      }
+    }
+  }
+  catch (itk::ExceptionObject &) {
+    return;
+  }
+
+  unsigned int uiVolumeNumber = 1;
+
+  for (const auto &stPair : mVolumeMap) {
+    for (const std::string &strSOPInstanceUID : stPair.second)
+      mSOPToVolumeNumber.emplace(strSOPInstanceUID, uiVolumeNumber);
+
+    ++uiVolumeNumber;
+  }
+}
+
+void ComputeVolumeNumberByAcquisitionTime(const itk::MetaDataDictionary &clDicomTags, const std::string &strPath) {
+  typedef itk::GDCMImageIO ImageIOType;
+  typedef itk::GDCMSeriesFileNames NamesGeneratorType;
+
+  std::string strSeriesUID;
+
+  if (!itk::ExposeMetaData(clDicomTags, "0020|000e", strSeriesUID))
+    return; // Uhh?
+
+  if (g_mSeriesUIDToInstanceUIDVolumeNumberMap.find(strSeriesUID) != g_mSeriesUIDToInstanceUIDVolumeNumberMap.end())
+    return; // Already computed
+
+  auto &mSOPToVolumeNumber = g_mSeriesUIDToInstanceUIDVolumeNumberMap[strSeriesUID]; // Insert
+
+  ImageIOType::Pointer p_clImageIO = ImageIOType::New();  
+
+  if (!p_clImageIO)
+    return;
+
+  NamesGeneratorType::Pointer p_clNamesGenerator = NamesGeneratorType::New();
+
+  if (!p_clNamesGenerator)
+    return;
+
+  // Collect all files in this series so we can verify their membership in the more specialized series
+  p_clNamesGenerator->SetUseSeriesDetails(false);
+  p_clNamesGenerator->SetDirectory(strPath);
+
+  std::unordered_set<std::string> sAllFiles;
+  std::vector<std::string> vAllFiles = p_clNamesGenerator->GetFileNames(strSeriesUID);
+  sAllFiles.insert(vAllFiles.begin(), vAllFiles.end());
+
+  if (sAllFiles.empty())
+    return; // What?
+
+  // Old data gets re-used... make a new one
+  p_clNamesGenerator = NamesGeneratorType::New();
+
+  if (!p_clNamesGenerator)
+    return;
+
+  p_clNamesGenerator->SetUseSeriesDetails(true);
+  p_clNamesGenerator->AddSeriesRestriction("0008|0022"); // Acquisition date
+  p_clNamesGenerator->AddSeriesRestriction("0008|0032"); // Acquisition time
+  p_clNamesGenerator->SetDirectory(strPath);
+
+  // These are fake versions of the series UID!
+  std::vector<std::string> vAllSeriesUIDs = p_clNamesGenerator->GetSeriesUIDs();
+
+  typedef std::map<time_t, std::vector<std::string>> MapType; // time stamp --> SOP instance UID
+
+  MapType mVolumeMap;
+  std::string strAcquisitionDate;
+  std::string strAcquisitionTime;
+  std::string strSOPInstanceUID;
+
+  try {
+    for (const std::string &strFakeSeriesUID : vAllSeriesUIDs) {
+      vAllFiles = p_clNamesGenerator->GetFileNames(strFakeSeriesUID);
+     
+      if (vAllFiles.empty() || sAllFiles.find(vAllFiles[0]) == sAllFiles.end())
+        continue;
+
+      p_clImageIO->SetFileName(vAllFiles[0]);
+      p_clImageIO->ReadImageInformation();
+
+      if (!itk::ExposeMetaData(p_clImageIO->GetMetaDataDictionary(), "0008|0022", strAcquisitionDate) || 
+        !itk::ExposeMetaData(p_clImageIO->GetMetaDataDictionary(), "0008|0032", strAcquisitionTime)) {
+        return; // Should not happen!
+      }
+
+      Trim(strAcquisitionDate);
+      Trim(strAcquisitionTime);
+
+      const time_t tAcquisitionStamp = ParseDICOMDateTime(strAcquisitionDate, strAcquisitionTime);
+
+      if (tAcquisitionStamp == -1)
+        return; // What?
+
+      auto &vSOPs = mVolumeMap[tAcquisitionStamp];
+      vSOPs.reserve(vAllFiles.size());
+
+      for (const std::string &strFileName : vAllFiles) {
+        p_clImageIO->SetFileName(strFileName);
+        p_clImageIO->ReadImageInformation();
+
+        if (!itk::ExposeMetaData(p_clImageIO->GetMetaDataDictionary(), "0008|0018", strSOPInstanceUID))
+          return;
+
+        Trim(strSOPInstanceUID);
+
+        vSOPs.emplace_back(strSOPInstanceUID);
+      }
+    }
+  }
+  catch (itk::ExceptionObject &) {
+    return;
+  }
+
+  unsigned int uiVolumeNumber = 1;
+
+  for (const auto &stPair : mVolumeMap) {
+    for (const std::string &strSOPInstanceUID : stPair.second)
+      mSOPToVolumeNumber.emplace(strSOPInstanceUID, uiVolumeNumber);
+
+    ++uiVolumeNumber;
+  }
+}
+
+std::string ComputeVolumeNumber(const itk::MetaDataDictionary &clDicomTags, const std::string &strPath) {
+  std::string strSeriesUID;
+
+  if (!itk::ExposeMetaData(clDicomTags, "0020|000e", strSeriesUID))
+    return std::string(); // Uhh?
+
+  Trim(strSeriesUID);
+
+  std::string strSOPInstanceUID;
+
+  if (!itk::ExposeMetaData(clDicomTags, "0008|0018", strSOPInstanceUID))
+    return std::string(); // Uhh?
+
+  Trim(strSOPInstanceUID);
+
+  if (clDicomTags.HasKey("0020|0100"))
+    ComputeVolumeNumberByTemporalPosition(clDicomTags, strPath);
+  else if (clDicomTags.HasKey("0020|0032"))
+    ComputeVolumeNumberByAcquisitionTime(clDicomTags, strPath);
+
+  auto itr = g_mSeriesUIDToInstanceUIDVolumeNumberMap.find(strSeriesUID);
+
+  if (itr != g_mSeriesUIDToInstanceUIDVolumeNumberMap.end()) {
+    auto itr2 = itr->second.find(strSOPInstanceUID);
+    return itr2 != itr->second.end() ? std::to_string(itr2->second) : std::string();
+  }
+  
+  return std::string("1"); // Probably not a time series
+}
+
 bool ParseITKTag(const std::string &strKey, uint16_t &ui16Group, uint16_t &ui16Element) {
   if (strKey.empty() || !IsHexDigit(strKey[0]))
     return false;
@@ -891,9 +1167,15 @@ std::string ComputeMD5HashHelper(const std::string &strFilePath) {
 
   typedef itk::Testing::HashImageFilter<ImageType> HashFilterType;
 
+#if ITK_VERSION_MAJOR > 4
+  using HashImageFilterEnums = itk::Testing::HashImageFilterEnums::HashFunction;
+#else // ITK_VERSION_MAJOR <= 4
+  using HashImageFilterEnums = HashFilterType;
+#endif // ITK_VERSION_MAJOR > 4
+
   typename HashFilterType::Pointer p_clHasher = HashFilterType::New();
 
-  p_clHasher->SetHashFunction(HashFilterType::MD5);
+  p_clHasher->SetHashFunction(HashImageFilterEnums::MD5);
   p_clHasher->SetInput(p_clImage);
 
   p_clHasher->Update();
