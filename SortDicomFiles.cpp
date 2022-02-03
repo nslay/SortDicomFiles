@@ -1052,7 +1052,7 @@ std::string ComputeVolumeNumber(const itk::MetaDataDictionary &clDicomTags, cons
 
   if (clDicomTags.HasKey("0020|0100"))
     ComputeVolumeNumberByTemporalPosition(clDicomTags, strPath);
-  else if (clDicomTags.HasKey("0020|0032"))
+  else if (clDicomTags.HasKey("0008|0032"))
     ComputeVolumeNumberByAcquisitionTime(clDicomTags, strPath);
 
   auto itr = g_mSeriesUIDToInstanceUIDVolumeNumberMap.find(strSeriesUID);
