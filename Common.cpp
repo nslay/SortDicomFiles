@@ -127,7 +127,7 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
 
   const double dSeconds = std::strtod(a_cTmp, &p);
 
-  if (*p != '\0')
+  if (*p != '\0' || dSeconds < 0.0 || dSeconds >= 60.0)
     return -1;
 
   std::tm stTime = {};
@@ -137,9 +137,21 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
   stTime.tm_mday = ulDay;
   stTime.tm_hour = ulHour;
   stTime.tm_min = ulMinute;
-  stTime.tm_sec = (unsigned long)std::min(std::round(dSeconds), 59.0);
+  stTime.tm_sec = std::round(dSeconds);
 
-  return std::mktime(&stTime);
+  int iCarry = 0; // Carry the rounded second to the actual time stamp
+
+  if (stTime.tm_sec > 59) {
+    --stTime.tm_sec;
+    iCarry = 1;
+  }
+
+  const std::time_t tRet = std::mktime(&stTime);
+
+  if (tRet == -1)
+    return -1;
+
+  return tRet + iCarry;
 }
 
 #ifdef _WIN32

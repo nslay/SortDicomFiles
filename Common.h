@@ -33,7 +33,7 @@
 
 void Trim(std::string &strString);
 std::vector<std::string> SplitString(const std::string &strValue, const std::string &strDelim);
-time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std::string &strAcquisitionTime);
+std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std::string &strAcquisitionTime);
 
 bool FileExists(const std::string &strPath);
 bool IsFolder(const std::string &strPath);
