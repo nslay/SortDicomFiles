@@ -127,7 +127,8 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
 
   const double dSeconds = std::strtod(a_cTmp, &p);
 
-  if (*p != '\0' || dSeconds < 0.0 || dSeconds >= 60.0)
+  // NOTE: Both C++11 and TM Value Representation allow for 60 seconds (leap seconds?)
+  if (*p != '\0' || dSeconds < 0.0 || dSeconds >= 61.0)
     return -1;
 
   std::tm stTime = {};
@@ -141,7 +142,7 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
 
   int iCarry = 0; // Carry the rounded second to the actual time stamp
 
-  if (stTime.tm_sec > 59) {
+  if (stTime.tm_sec > 60) {
     --stTime.tm_sec;
     iCarry = 1;
   }
