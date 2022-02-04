@@ -131,6 +131,9 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
   if (*p != '\0' || dSeconds < 0.0 || dSeconds >= 61.0)
     return -1;
 
+  double dIntegerSeconds = 0.0;
+  const double dFractionalSeconds = std::modf(dSeconds, &dIntegerSeconds);
+
   std::tm stTime = {};
 
   stTime.tm_year = ulYear - 1900;
@@ -138,21 +141,14 @@ std::time_t ParseDICOMDateTime(const std::string &strAcquisitionDate, const std:
   stTime.tm_mday = ulDay;
   stTime.tm_hour = ulHour;
   stTime.tm_min = ulMinute;
-  stTime.tm_sec = std::round(dSeconds);
-
-  int iCarry = 0; // Carry the rounded second to the actual time stamp
-
-  if (stTime.tm_sec > 60) {
-    --stTime.tm_sec;
-    iCarry = 1;
-  }
+  stTime.tm_sec = (unsigned long)dIntegerSeconds;
 
   const std::time_t tRet = std::mktime(&stTime);
 
   if (tRet == -1)
     return -1;
 
-  return tRet + iCarry;
+  return tRet + (dFractionalSeconds >= 0.5 ? 1 : 0);
 }
 
 #ifdef _WIN32
