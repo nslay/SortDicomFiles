@@ -183,6 +183,14 @@ int main(int argc, char **argv) {
   g_mNameToTagMap["acquisition date"] = "0008|0022";
   g_mNameToTagMap["acquisition time"] = "0008|0032";
   g_mNameToTagMap["temporal position"] = "0020|0100";
+  g_mNameToTagMap["repetition time"] = "0018|0080";
+  g_mNameToTagMap["echo time"] = "0018|0081";
+  g_mNameToTagMap["magnetic field strength"] = "0018|0087";
+  g_mNameToTagMap["field of view"] = "0018|0094";
+  g_mNameToTagMap["manufacturer"] = "0008|0070";
+  g_mNameToTagMap["flip angle"] = "0018|1314";
+  g_mNameToTagMap["slice thickness"] = "0018|0050";
+  g_mNameToTagMap["acquisition matrix"] = "0018|1310";
 
   bool bEraseFolders = false;
   bool bRecursive = false;

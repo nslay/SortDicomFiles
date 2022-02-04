@@ -408,8 +408,7 @@ std::string DirName(std::string strPath) {
 }
 #endif // __unix__
 
-#ifdef _WIN32
-
+// NOTE: Use Windows rules on Unix-like systems since some mounted file systems may be remote Windows systems
 // https://msdn.microsoft.com/en-us/library/aa365247
 
 void SanitizeFileName(std::string &strFileName) {
@@ -433,23 +432,6 @@ void SanitizeFileName(std::string &strFileName) {
     }
   }
 }
-#endif // _WIN32
-
-#ifdef __unix__
-void SanitizeFileName(std::string &strFileName) {
-  for (size_t i = 0; i < strFileName.size(); ++i) {
-    switch (strFileName[i]) {
-    case '/':
-      strFileName[i] = '_';
-      break;
-    default:
-      if (!std::isprint(strFileName[i]))
-        strFileName[i] = '_';
-      break;
-    }
-  }
-}
-#endif // __unix__
 
 #ifdef _WIN32
 void FindFiles(const char *p_cDir, const char *p_cPattern, std::vector<std::string> &vFiles, bool bRecursive) {
